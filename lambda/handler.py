@@ -31,12 +31,22 @@ def lambda_handler(event, context):
 
         records = []
         for item in data_items:
-            value_type = item.get("Type", "VARCHAR")
-            value = str(item.get("Value"))
-            station = item.get("StationName", "unknown")
-            variable = item.get("Variable", "unknown")
-            quality = item.get("QualityCode", "UNKNOWN")
-            source_time = item.get("SourceTimestamp", timestamp)
+            value_type = item.get("Type", "VARCHAR").upper()
+            raw_value = item.get("Value")
+
+            # Convert value based on type
+            if value_type == "BOOLEAN" or value_type == "BOOL":
+                value = "true" if str(raw_value).lower() in ["1", "true"] else "false"
+                measure_type = "BOOLEAN"
+            elif value_type in ["INT", "INT16", "INT32", "INT64", "LONG"]:
+                value = str(int(raw_value))
+                measure_type = "BIGINT"
+            elif value_type in ["DOUBLE", "FLOAT"]:
+                value = str(float(raw_value))
+                measure_type = "DOUBLE"
+            else:
+                value = str(raw_value)
+                measure_type = "VARCHAR"
 
             records.append({
                 'Dimensions': [
@@ -46,7 +56,7 @@ def lambda_handler(event, context):
                 ],
                 'MeasureName': variable,
                 'MeasureValue': value,
-                'MeasureValueType': map_type(value_type),
+                'MeasureValueType': measure_type,
                 'Time': str(int(datetime.fromisoformat(source_time).timestamp() * 1000)),
                 'TimeUnit': 'MILLISECONDS'
             })
