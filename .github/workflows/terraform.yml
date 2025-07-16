@@ -23,7 +23,7 @@ jobs:
 
       - name: Zip Lambda
         run: |
-          cd iot-lambda-terraform/lambda
+          cd lambda
           zip ../lambda.zip handler.py
 
       - name: Terraform Init & Apply
