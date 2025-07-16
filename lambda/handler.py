@@ -30,18 +30,23 @@ def lambda_handler(event, context):
             return {"statusCode": 400, "body": "Invalid payload"}
 
         records = []
+
         for item in data_items:
+            variable = item.get("Variable")
             value_type = item.get("Type", "VARCHAR").upper()
             raw_value = item.get("Value")
+            quality = item.get("QualityCode", "UNKNOWN")
+            station = item.get("StationName", "unknown")
+            source_time = item.get("SourceTimestamp", datetime.utcnow().isoformat())
 
             # Convert value based on type
-            if value_type == "BOOLEAN" or value_type == "BOOL":
+            if value_type in ["BOOL", "BOOLEAN"]:
                 value = "true" if str(raw_value).lower() in ["1", "true"] else "false"
                 measure_type = "BOOLEAN"
             elif value_type in ["INT", "INT16", "INT32", "INT64", "LONG"]:
                 value = str(int(raw_value))
                 measure_type = "BIGINT"
-            elif value_type in ["DOUBLE", "FLOAT"]:
+            elif value_type in ["FLOAT", "DOUBLE"]:
                 value = str(float(raw_value))
                 measure_type = "DOUBLE"
             else:
