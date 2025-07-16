@@ -49,9 +49,9 @@ def lambda_handler(event, context):
 
             records.append({
                 'Dimensions': [
-                    {'Name': 'Station', 'Value': station},
-                    {'Name': 'Variable', 'Value': variable},
-                    {'Name': 'QualityCode', 'Value': quality}
+                    {'Name': 'Station', 'Value': station, 'DimensionValueType': 'VARCHAR'},
+                    {'Name': 'Variable', 'Value': variable, 'DimensionValueType': 'VARCHAR'},
+                    {'Name': 'QualityCode', 'Value': quality, 'DimensionValueType': 'VARCHAR'}
                 ],
                 'MeasureName': variable,
                 'MeasureValue': str(value),
