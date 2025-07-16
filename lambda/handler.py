@@ -26,6 +26,7 @@ def lambda_handler(event, context):
 
         # Process DataItems
         data_items = payload.get("DataItems", [])
+        data_items = data_items[:100] # Limit to 100 items
         print(f"📦 Found {len(data_items)} data items.")
 
         records = []
