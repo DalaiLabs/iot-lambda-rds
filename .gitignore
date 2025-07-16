@@ -1,0 +1,20 @@
+# === Lambda Build Artifacts ===
+lambda.zip
+build/
+__pycache__/
+lambda/layer/*
+!lambda/layer/.gitkeep
+
+# === Terraform ===
+.terraform/
+.terraform.lock.hcl.backup
+terraform.tfstate
+terraform.tfstate.*
+crash.log
+*.tfplan
+
+# === IDEs & Editor Settings ===
+.vscode/
+.idea/
+*.swp
+.DS_Store
