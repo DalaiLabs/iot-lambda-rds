@@ -1,64 +1,77 @@
 import boto3
+import os
 import json
 from datetime import datetime
-from dateutil import parser
 
-timestream = boto3.client('timestream-write')
 DATABASE_NAME = 'iot_telemetry'
 TABLE_NAME = 'iot_data_items'
+timestream = boto3.client('timestream-write')
+
 
 def lambda_handler(event, context):
-    for record in event.get("Records", []):
-        try:
-            payload = json.loads(record.get("body", "{}"))
-            data_items = payload.get("DataItems", [])
-            timestamp = payload.get("Timestamp")
+    try:
+        # Parse event if it's a JSON string
+        payload = event if isinstance(event, dict) else json.loads(event)
 
-            timestream_records = []
-            for item in data_items:
-                try:
-                    variable = item["Variable"]
-                    value = item["Value"]
-                    value_type = item["Type"]
-                    quality = item.get("QualityCode", "UNKNOWN")
-                    station = item.get("StationName", "UNKNOWN")
-                    ts = item.get("SourceTimestamp", timestamp)
+        data_items = payload.get('DataItems')
+        if not data_items:
+            print("❌ No 'DataItems' key found in the payload.")
+            return {"statusCode": 400, "body": "Missing DataItems"}
 
-                    # Determine correct MeasureValueType
-                    value_type_map = {
-                        "BOOL": "BOOLEAN",
-                        "INT16": "BIGINT",
-                        "INT32": "BIGINT",
-                        "FLOAT": "DOUBLE",
-                        "DOUBLE": "DOUBLE"
-                    }
-                    measure_type = value_type_map.get(value_type.upper(), "VARCHAR")
+        records = []
 
-                    timestream_records.append({
-                        'Dimensions': [
-                            {'Name': 'Station', 'Value': station},
-                            {'Name': 'Variable', 'Value': variable},
-                            {'Name': 'QualityCode', 'Value': quality}
-                        ],
-                        'MeasureName': variable,
-                        'MeasureValue': str(value),
-                        'MeasureValueType': measure_type,
-                        'Time': str(int(parser.parse(ts).timestamp() * 1000)),
-                        'TimeUnit': 'MILLISECONDS'
-                    })
+        for item in data_items:
+            try:
+                # Extract fields
+                variable = item['Variable']
+                value = item['Value']
+                value_type = item['Type']
+                station = item['StationName']
+                quality = item.get('QualityCode', 'UNKNOWN')
+                timestamp = item.get('SourceTimestamp') or payload.get('Timestamp')
 
-                except Exception as item_error:
-                    print(f"Skipping item due to error: {item_error}")
+                # Determine Timestream measure value type
+                if value_type == 'BOOL':
+                    measure_value_type = 'BIGINT'
+                elif value_type in ['INT16', 'INT32', 'INT']:
+                    measure_value_type = 'BIGINT'
+                elif value_type in ['FLOAT', 'DOUBLE', 'DECIMAL']:
+                    measure_value_type = 'DOUBLE'
+                else:
+                    measure_value_type = 'VARCHAR'
 
-            if timestream_records:
-                timestream.write_records(
-                    DatabaseName=DATABASE_NAME,
-                    TableName=TABLE_NAME,
-                    Records=timestream_records
-                )
-                print(f"Wrote {len(timestream_records)} records to Timestream")
+                # Convert ISO timestamp to epoch ms
+                epoch_ms = int(datetime.fromisoformat(timestamp).timestamp() * 1000)
 
-        except Exception as e:
-            print(f"Error processing record: {e}")
+                records.append({
+                    'Dimensions': [
+                        {'Name': 'Station', 'Value': station},
+                        {'Name': 'Variable', 'Value': variable},
+                        {'Name': 'QualityCode', 'Value': quality}
+                    ],
+                    'MeasureName': variable,
+                    'MeasureValue': str(value),
+                    'MeasureValueType': measure_value_type,
+                    'Time': str(epoch_ms),
+                    'TimeUnit': 'MILLISECONDS'
+                })
 
-    return {"statusCode": 200, "body": "Write successful"}
+            except Exception as item_error:
+                print(f"⚠️ Skipping item due to error: {item} → {item_error}")
+
+        if not records:
+            print("⚠️ No valid records to write to Timestream.")
+            return {"statusCode": 204, "body": "No valid records"}
+
+        # Write to Timestream
+        response = timestream.write_records(
+            DatabaseName=DATABASE_NAME,
+            TableName=TABLE_NAME,
+            Records=records
+        )
+        print(f"✅ Successfully wrote {len(records)} records to Timestream.")
+        return {"statusCode": 200, "body": json.dumps(response)}
+
+    except Exception as e:
+        print(f"❌ Lambda failed with error: {e}")
+        return {"statusCode": 500, "body": str(e)}
