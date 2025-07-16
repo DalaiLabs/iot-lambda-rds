@@ -1,4 +1,3 @@
-
 name: Deploy IoT Lambda
 
 on:
@@ -21,10 +20,11 @@ jobs:
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v2
 
-      - name: Zip Lambda
+      - name: Install Lambda Dependencies
         run: |
           cd lambda
-          zip ../lambda.zip handler.py
+          pip install -r requirements.txt -t python
+          zip -r ../lambda.zip .
 
       - name: Terraform Init & Apply
         run: |
