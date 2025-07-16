@@ -1,5 +1,4 @@
 import boto3
-import os
 import json
 from datetime import datetime
 
@@ -8,15 +7,20 @@ TABLE_NAME = 'iot_data_items'
 timestream = boto3.client('timestream-write')
 
 def lambda_handler(event, context):
-    for record in event['Records']:
-        payload = json.loads(record['body']) if 'body' in record else json.loads(record['payload'])
+    records = event.get('Records')
+    if not records:
+        print("No 'Records' key found in the event.")
+        return {"statusCode": 400, "body": "Invalid event structure"}
 
-        variable = payload.get('Variable')
-        value = str(payload.get('Value'))
-        station = payload.get('StationName', 'unknown')
-        quality = payload.get('QualityCode', 'UNKNOWN')
-
+    for record in records:
         try:
+            payload = json.loads(record['body']) if 'body' in record else json.loads(record['payload'])
+
+            variable = payload.get('Variable')
+            value = str(payload.get('Value'))
+            station = payload.get('StationName', 'unknown')
+            quality = payload.get('QualityCode', 'UNKNOWN')
+
             timestream.write_records(
                 DatabaseName=DATABASE_NAME,
                 TableName=TABLE_NAME,
@@ -36,5 +40,6 @@ def lambda_handler(event, context):
                 ]
             )
         except Exception as e:
-            print(f"Error writing to Timestream: {e}")
+            print(f"Error processing record: {e}")
+
     return {"statusCode": 200}
