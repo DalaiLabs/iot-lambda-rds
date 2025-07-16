@@ -7,78 +7,72 @@ TABLE_NAME = 'iot_data_items'
 
 timestream = boto3.client('timestream-write')
 
-
-def map_type(datatype):
-    t = datatype.upper()
-    if t in ["DOUBLE", "FLOAT"]:
-        return "DOUBLE"
-    if t in ["INT", "INT16", "INT32", "INT64", "LONG"]:
-        return "BIGINT"
-    if t in ["BOOL", "BOOLEAN"]:
-        return "BOOLEAN"
-    return "VARCHAR"
-
-
 def lambda_handler(event, context):
-    try:
-        payload = json.loads(event['body']) if 'body' in event else event
-        data_items = payload.get("DataItems", [])
-        timestamp = payload.get("Timestamp")
+    print("🔁 Lambda triggered.")
 
-        if not data_items or not timestamp:
-            print("Invalid payload: Missing DataItems or Timestamp.")
-            return {"statusCode": 400, "body": "Invalid payload"}
+    try:
+        # Parse payload
+        payload = json.loads(event['body']) if 'body' in event else event
+        print("✅ Payload parsed.")
+
+        # Extract timestamp
+        timestamp_str = payload.get("Timestamp")
+        try:
+            timestamp_ms = str(int(datetime.fromisoformat(timestamp_str).timestamp() * 1000))
+            print(f"⏱️ Timestamp parsed from payload: {timestamp_ms}")
+        except Exception:
+            timestamp_ms = str(int(datetime.utcnow().timestamp() * 1000))
+            print(f"⚠️ Fallback to current UTC time: {timestamp_ms}")
+
+        # Process DataItems
+        data_items = payload.get("DataItems", [])
+        print(f"📦 Found {len(data_items)} data items.")
 
         records = []
 
         for item in data_items:
-            variable = item.get("Variable")
-            value_type = item.get("Type", "VARCHAR").upper()
-            raw_value = item.get("Value")
-            quality = item.get("QualityCode", "UNKNOWN")
+            variable = item.get("Variable", "unknown")
+            value = item.get("Value", 0)
+            var_type = item.get("Type", "DOUBLE")
             station = item.get("StationName", "unknown")
-            source_time = item.get("SourceTimestamp")
-            if isinstance(source_time, list):
-                source_time = source_time[0]  # take the first element if list
-            if not source_time:
-                source_time = datetime.utcnow().isoformat()
+            quality = item.get("QualityCode", "UNKNOWN")
 
-            # Convert value based on type
-            if value_type in ["BOOL", "BOOLEAN"]:
-                value = "true" if str(raw_value).lower() in ["1", "true"] else "false"
-                measure_type = "BOOLEAN"
-            elif value_type in ["INT", "INT16", "INT32", "INT64", "LONG"]:
-                value = str(int(raw_value))
-                measure_type = "BIGINT"
-            elif value_type in ["FLOAT", "DOUBLE"]:
-                value = str(float(raw_value))
-                measure_type = "DOUBLE"
+            # Determine MeasureValueType
+            if var_type.upper() in ["INT", "INT16", "INT32", "INT64"]:
+                measure_value_type = "BIGINT"
+            elif var_type.upper() == "BOOL":
+                measure_value_type = "BOOLEAN"
+            elif var_type.upper() in ["FLOAT", "DOUBLE"]:
+                measure_value_type = "DOUBLE"
             else:
-                value = str(raw_value)
-                measure_type = "VARCHAR"
+                measure_value_type = "VARCHAR"
 
             records.append({
                 'Dimensions': [
-                    {'Name': 'Station', 'Value': station, 'DimensionValueType': 'VARCHAR'},
-                    {'Name': 'Variable', 'Value': variable, 'DimensionValueType': 'VARCHAR'},
-                    {'Name': 'QualityCode', 'Value': quality, 'DimensionValueType': 'VARCHAR'}
+                    {'Name': 'Station', 'Value': station},
+                    {'Name': 'Variable', 'Value': variable},
+                    {'Name': 'QualityCode', 'Value': quality}
                 ],
                 'MeasureName': variable,
-                'MeasureValue': value,
-                'MeasureValueType': measure_type,
-                'Time': str(int(datetime.fromisoformat(source_time).timestamp() * 1000)),
+                'MeasureValue': str(value),
+                'MeasureValueType': measure_value_type,
+                'Time': timestamp_ms,
                 'TimeUnit': 'MILLISECONDS'
             })
 
-        result = timestream.write_records(
-            DatabaseName=DATABASE_NAME,
-            TableName=TABLE_NAME,
-            Records=records
-        )
-        print("Write result:", result)
+        print(f"📝 Prepared {len(records)} records for writing to Timestream.")
+
+        # Write to Timestream
+        if records:
+            timestream.write_records(
+                DatabaseName=DATABASE_NAME,
+                TableName=TABLE_NAME,
+                Records=records
+            )
+            print("✅ Records successfully written to Timestream.")
+
+        return {"statusCode": 200, "body": "Data written to Timestream"}
 
     except Exception as e:
-        print(f"Error writing to Timestream: {e}")
-        return {"statusCode": 500, "body": "Failed to write to Timestream"}
-
-    return {"statusCode": 200, "body": "Success"}
+        print(f"❌ Error writing to Timestream: {e}")
+        return {"statusCode": 500, "body": f"Failed: {str(e)}"}
