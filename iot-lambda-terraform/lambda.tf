@@ -4,8 +4,8 @@ resource "aws_lambda_function" "iot_handler" {
   role          = aws_iam_role.lambda_exec.arn
   handler       = "handler.lambda_handler"
   runtime       = "python3.11"
-  filename      = "${path.module}/lambda.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda.zip")
+  source_code_hash = filebase64sha256("../lambda.zip")
+  filename         = "../lambda.zip"
   timeout = 10
   environment {
     variables = {
