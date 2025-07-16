@@ -37,7 +37,11 @@ def lambda_handler(event, context):
             raw_value = item.get("Value")
             quality = item.get("QualityCode", "UNKNOWN")
             station = item.get("StationName", "unknown")
-            source_time = item.get("SourceTimestamp", datetime.utcnow().isoformat())
+            source_time = item.get("SourceTimestamp")
+            if isinstance(source_time, list):
+                source_time = source_time[0]  # take the first element if list
+            if not source_time:
+                source_time = datetime.utcnow().isoformat()
 
             # Convert value based on type
             if value_type in ["BOOL", "BOOLEAN"]:
