@@ -26,7 +26,7 @@ def lambda_handler(event, context):
 
         # Process DataItems
         data_items = payload.get("DataItems", [])
-        data_items = data_items[:100] # Limit to 100 items
+        data_items = data_items[:100]  # Timestream record limit
         print(f"📦 Found {len(data_items)} data items.")
 
         records = []
@@ -38,15 +38,30 @@ def lambda_handler(event, context):
             station = item.get("StationName", "unknown")
             quality = item.get("QualityCode", "UNKNOWN")
 
-            # Determine MeasureValueType
-            if var_type.upper() in ["INT", "INT16", "INT32", "INT64"]:
-                measure_value_type = "BIGINT"
-            elif var_type.upper() == "BOOL":
-                measure_value_type = "BOOLEAN"
-            elif var_type.upper() in ["FLOAT", "DOUBLE"]:
-                measure_value_type = "DOUBLE"
-            else:
-                measure_value_type = "VARCHAR"
+            # Skip invalid values (like list type)
+            if isinstance(value, list):
+                print(f"⛔ Skipping {variable} due to invalid list value: {value}")
+                continue
+
+            # Determine MeasureValueType and safely cast value
+            try:
+                if var_type.upper() in ["INT", "INT16", "INT32", "INT64"]:
+                    measure_value_type = "BIGINT"
+                    value = str(int(value))
+                elif var_type.upper() == "BOOL":
+                    measure_value_type = "BOOLEAN"
+                    value = str(bool(value)).lower()
+                elif var_type.upper() in ["FLOAT", "DOUBLE"]:
+                    measure_value_type = "DOUBLE"
+                    value = str(float(value))
+                else:
+                    measure_value_type = "VARCHAR"
+                    value = str(value)
+            except Exception as ve:
+                print(f"⚠️ Skipping {variable} due to value casting error: {ve}")
+                continue
+
+            print(f"🧪 {variable} = {value} ({measure_value_type})")
 
             records.append({
                 'Dimensions': [
@@ -55,7 +70,7 @@ def lambda_handler(event, context):
                     {'Name': 'QualityCode', 'Value': quality, 'DimensionValueType': 'VARCHAR'}
                 ],
                 'MeasureName': variable,
-                'MeasureValue': str(value),
+                'MeasureValue': value,
                 'MeasureValueType': measure_value_type,
                 'Time': timestamp_ms,
                 'TimeUnit': 'MILLISECONDS'
