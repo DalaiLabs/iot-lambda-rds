@@ -1,4 +1,4 @@
-
+# This is a terraform designed for lambda deployment and IoT rule creation
 resource "aws_lambda_function" "iot_handler" {
   function_name = "iot_lambda_handler"
   role          = aws_iam_role.lambda_exec.arn
