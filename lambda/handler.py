@@ -26,8 +26,9 @@ def lambda_handler(event, context):
 
         # Process DataItems
         data_items = payload.get("DataItems", [])
+        print(f"📊 Processing {len(data_items)} data items...")
         data_items = data_items[:100]  # Timestream record limit
-        print(f"📦 Found {len(data_items)} data items.")
+        print(f"📦 Found first {len(data_items)} data items.")
 
         records = []
 
